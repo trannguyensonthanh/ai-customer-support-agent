@@ -54,10 +54,10 @@ export function initIo(httpServer, corsOrigin) {
     socket.on('customer:cancel_escalation', ({ sessionId }) => {
       if (!sessionId) return;
       const conv = conversationStore.bySession(sessionId);
-      if (!conv || conv.status !== 'escalated') return;
+      if (!conv || (conv.status !== 'escalated' && conv.status !== 'human')) return;
       
       // Chuyển lại trạng thái về bot
-      conversationStore.update(conv.id, { status: 'bot' });
+      conversationStore.update(conv.id, { status: 'bot', assignedAgent: null });
       
       // Hủy ticket đang open nếu có
       ticketStore.list()
@@ -71,6 +71,7 @@ export function initIo(httpServer, corsOrigin) {
         agentName: 'Hệ thống',
         text: 'Đã hủy yêu cầu chuyển máy. Trợ lý AI đã quay lại hỗ trợ bạn!',
       });
+      io.to(room(sessionId)).emit('return_to_ai', {});
     });
 
     socket.on('customer:stop_typing', ({ sessionId }) => {
@@ -105,6 +106,25 @@ export function initIo(httpServer, corsOrigin) {
         assignedAgent: socket.data.agent.name,
       });
       io.to(room(conv.sessionId)).emit('agent_takeover', { agentName: socket.data.agent.name });
+      io.to('agents').emit('agent:conversation_updated', { conversationId });
+    });
+
+    socket.on('agent:return_to_ai', ({ conversationId }) => {
+      if (!socket.data.agent) return;
+      const conv = conversationStore.get(conversationId);
+      if (!conv) return;
+      
+      conversationStore.update(conversationId, {
+        status: 'bot',
+        assignedAgent: null,
+      });
+      messageStore.add(conversationId, 'system', `${socket.data.agent.name} đã chuyển lại cho AI.`);
+      
+      io.to(room(conv.sessionId)).emit('agent_message', {
+        agentName: 'Hệ thống',
+        text: 'Nhân viên đã chuyển cuộc gọi lại cho trợ lý AI. Bạn có thể tiếp tục trò chuyện với AI.',
+      });
+      io.to(room(conv.sessionId)).emit('return_to_ai', {});
       io.to('agents').emit('agent:conversation_updated', { conversationId });
     });
 

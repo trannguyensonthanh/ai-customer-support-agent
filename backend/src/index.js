@@ -8,7 +8,7 @@ import { adminRouter } from './routes/admin.js';
 import { customerRouter } from './routes/customer.js';
 import { productRouter } from './routes/products.js';
 import { seed } from './db/store.js';
-import { syncEmbeddings } from './services/embeddingStore.js';
+import { syncEmbeddings, syncProductEmbeddings } from './services/embeddingStore.js';
 import { initIo } from './realtime/io.js';
 
 import { initClipStore } from './services/clipStore.js';
@@ -32,7 +32,7 @@ initIo(server, config.corsOrigin);
 async function start() {
   seed();
   await syncEmbeddings();
-  // Khong the await initClipStore() o day vi model chay lau, khien cho server start bi treo
+  await syncProductEmbeddings();
   // Cho no chay ngam o background
   initClipStore();
 
@@ -66,9 +66,14 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.once('SIGUSR2', () => {
   // Nodemon gửi SIGUSR2 khi restart
+  console.log('[SIGUSR2] Nodemon restart - Đang giải phóng cổng...');
   server.close(() => {
     process.kill(process.pid, 'SIGUSR2');
   });
+  // Bắt buộc thoát để Nodemon có thể restart nếu có connection treo
+  setTimeout(() => {
+    process.kill(process.pid, 'SIGUSR2');
+  }, 1000).unref();
 });
 
 // touch

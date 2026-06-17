@@ -1,6 +1,8 @@
 import { Type } from '@google/genai';
 import { orderStore, faqStore, productStore, voucherStore, normalizeVi } from '../db/store.js';
-import { searchKnowledgeBase } from '../services/embeddingStore.js';
+import { searchKnowledgeBase, searchProductsSemantic } from '../services/embeddingStore.js';
+
+const cancelTokens = new Map();
 
 export const functionDeclarations = [
   {
@@ -24,17 +26,16 @@ export const functionDeclarations = [
   },
   {
     name: 'find_orders_by_contact',
-    description: 'Tim cac don hang theo email hoac so dien thoai khi khach khong nho ma don.',
+    description: 'Tra cuu danh sach tat ca don hang cua khach hang hien tai. (Luu y: phai dang nhap moi xem duoc, neu khach chua dang nhap thi phai yeu cau dang nhap. Khong tra cuu duoc bang email/sdt cua nguoi khac).',
     parameters: {
       type: Type.OBJECT,
-      properties: { contact: { type: Type.STRING, description: 'Email hoac SDT.' } },
-      required: ['contact'],
+      properties: {}
     },
   },
   {
-    name: 'cancel_order',
+    name: 'request_cancel',
     description:
-      'Huy don hang theo ma don. Chi huy duoc don o trang thai "Cho xac nhan", "Da xac nhan", "Dang chuan bi". Don "Dang giao" hoac "Da giao" khong the huy.',
+      'Yeu cau huy don hang theo ma don. Chi huy duoc don o trang thai "Cho xac nhan", "Da xac nhan", "Dang chuan bi". Server se tra ve mot MA XAC NHAN. Ban phai huong dan khach doc ma xac nhan do. Sau do dung tool confirm_cancel.',
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -45,13 +46,22 @@ export const functionDeclarations = [
     },
   },
   {
-    name: 'find_cancellable_orders',
-    description: 'Tim cac don hang co the huy duoc cua khach hang hien tai (cho xac nhan, da xac nhan, dang chuan bi). Dung khi khach muon huy nhung khong cung cap ma don.',
+    name: 'confirm_cancel',
+    description: 'Xac nhan huy don hang bang MA XAC NHAN da nhan duoc tu request_cancel.',
     parameters: {
       type: Type.OBJECT,
       properties: {
-        contact: { type: Type.STRING, description: 'Email hoac SDT cua khach hang (neu biet).' }
-      }
+        token: { type: Type.STRING, description: 'Ma xac nhan huy don (vd: 123456).' },
+      },
+      required: ['token'],
+    },
+  },
+  {
+    name: 'find_cancellable_orders',
+    description: 'Tim cac don hang co the huy duoc cua khach hang hien tai (cho xac nhan, da xac nhan, dang chuan bi). (Luu y: phai dang nhap moi xem duoc, neu khach chua dang nhap thi phai yeu cau dang nhap).',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {}
     }
   },
   {
@@ -61,11 +71,11 @@ export const functionDeclarations = [
     parameters: {
       type: Type.OBJECT,
       properties: {
-        query: { type: Type.STRING, description: 'Tu khoa tim kiem (ten, mo ta, danh muc).' },
-        category: { type: Type.STRING, description: 'Loc theo danh muc (Dien tu, Gia dung, Thoi trang, Phu kien, Lam dep).' },
+        query: { type: Type.STRING, description: 'Tu khoa tim kiem (ten, mo ta, danh muc). Nen de trong neu chi can tim theo category.' },
+        category: { type: Type.STRING, description: 'Loc theo danh muc (Điện tử, Gia dụng, Thời trang, Phụ kiện, Làm đẹp).' },
         max_results: { type: Type.NUMBER, description: 'So san pham tra ve (mac dinh 5).' },
+        in_stock_only: { type: Type.BOOLEAN, description: 'Chi tra ve san pham con hang (mac dinh la false).' },
       },
-      required: ['query'],
     },
   },
   {
@@ -128,6 +138,9 @@ function summarizeProduct(p) {
     originalPrice: p.originalPrice,
     description: p.description,
     stock: p.stock,
+    sold: p.sold,
+    rating: p.rating,
+    reviews: p.reviews,
     image: p.image,
     tags: p.tags,
   };
@@ -150,60 +163,104 @@ export const executors = {
     const order = orderStore.byCode(order_code);
     if (!order) return { found: false, message: `Khong tim thay don ${order_code}.` };
     
-    if (order.customerId !== customerContext.id) {
+    const isOwner = order.customerId === customerContext.id || (order.email && order.email.toLowerCase() === customerContext.email.toLowerCase());
+    if (!isOwner) {
       return { found: false, message: `[BAO MAT] Don hang ${order_code} khong thuoc tai khoan cua ban. Ban khong duoc phep xem.` };
     }
     
     return { found: true, order: summarizeOrder(order) };
   },
 
-  async find_orders_by_contact({ contact }, customerContext) {
+  async find_orders_by_contact({}, customerContext) {
     if (!customerContext) {
       return { found: false, message: `[BAO MAT] Vui long dang nhap vao he thong de tra cuu danh sach don hang.` };
     }
-    // Chi tra ve don hang cua chinh tai khoan dang dang nhap, bo qua tham so contact do AI truyen vao de chong hack
-    const list = orderStore.byCustomer(customerContext.id);
+    // Chi tra ve don hang cua chinh tai khoan dang dang nhap, bao gom ca fallback qua email cho data seed
+    let list = orderStore.byCustomer(customerContext.id);
+    const byEmail = orderStore.byCustomerEmail(customerContext.email);
+    const existingIds = new Set(list.map(o => o.id));
+    for (const o of byEmail) {
+      if (!existingIds.has(o.id)) list.push(o);
+    }
     return { found: list.length > 0, count: list.length, orders: list.map(summarizeOrder) };
   },
 
-  async cancel_order({ order_code, reason }, customerContext) {
+  async request_cancel({ order_code, reason }, customerContext) {
     if (!customerContext) {
       return { success: false, message: `[BAO MAT] Vui long dang nhap de huy don hang.` };
     }
     const order = orderStore.byCode(order_code);
     if (!order) return { success: false, message: `Khong tim thay don ${order_code}.` };
     
-    if (order.customerId !== customerContext.id) {
+    const isOwner = order.customerId === customerContext.id || (order.email && order.email.toLowerCase() === customerContext.email.toLowerCase());
+    if (!isOwner) {
       return { success: false, message: `[BAO MAT] Ban khong co quyen huy don hang cua nguoi khac.` };
     }
 
-    const result = orderStore.cancelOrder(order_code, reason || 'Khách yêu cầu hủy qua chat');
+    const cancellable = ['Chờ xác nhận', 'Đã xác nhận', 'Đang chuẩn bị'];
+    if (!cancellable.includes(order.status)) {
+      return { success: false, message: `Đơn đang ở trạng thái "${order.status}", không thể hủy.` };
+    }
+
+    // Generate token
+    const token = Math.floor(100000 + Math.random() * 900000).toString();
+    cancelTokens.set(token, { order_code, reason, customerId: customerContext.id });
+    
+    // Auto expire token after 5 minutes
+    setTimeout(() => cancelTokens.delete(token), 5 * 60 * 1000);
+
+    return { 
+      success: true, 
+      token, 
+      message: `He thong da tao ma xac nhan: ${token}. Hay hien thi ma nay va yeu cau khach hang tra loi chinh xac ma de xac nhan viec huy don hang.` 
+    };
+  },
+
+  async confirm_cancel({ token }, customerContext) {
+    if (!customerContext) return { success: false, message: '[BAO MAT] Chua dang nhap.' };
+    
+    const pending = cancelTokens.get(token);
+    if (!pending) {
+      return { success: false, message: 'Ma xac nhan khong hop le hoac da het han.' };
+    }
+    if (pending.customerId !== customerContext.id) {
+      return { success: false, message: 'Ma xac nhan khong thuoc ve tai khoan nay.' };
+    }
+
+    const result = orderStore.cancelOrder(pending.order_code, pending.reason || 'Khách yêu cầu hủy qua chat');
+    cancelTokens.delete(token);
+
     if (result.success) {
       return {
         success: true,
-        message: result.message,
-        order: result.order ? summarizeOrder(result.order) : null,
+        message: `Huy thanh cong don hang ${pending.order_code}. So tien (neu co) va ton kho da duoc hoan lai.`,
       };
     }
     return { success: false, message: result.message };
   },
 
-  async find_cancellable_orders({ contact }, customerContext) {
+  async find_cancellable_orders({}, customerContext) {
     if (!customerContext) {
       return { found: false, message: '[BAO MAT] Vui long dang nhap de xem cac don hang co the huy.' };
     }
     // Chi tra ve cac don hang cua KH dang dang nhap
-    const list = orderStore.byCustomer(customerContext.id).filter(o => ['Chờ xác nhận', 'Đã xác nhận', 'Đang chuẩn bị'].includes(o.status));
+    let allOrders = orderStore.byCustomer(customerContext.id);
+    const byEmail = orderStore.byCustomerEmail(customerContext.email);
+    const existingIds = new Set(allOrders.map(o => o.id));
+    for (const o of byEmail) {
+      if (!existingIds.has(o.id)) allOrders.push(o);
+    }
+    const list = allOrders.filter(o => ['Chờ xác nhận', 'Đã xác nhận', 'Đang chuẩn bị'].includes(o.status));
     return { found: list.length > 0, count: list.length, orders: list.map(summarizeOrder) };
   },
 
-  async search_products({ query, category, max_results }) {
+  async search_products({ query, category, max_results, in_stock_only }) {
     const limit = Math.min(max_results || 5, 8);
-    const results = productStore.search({
+    const results = await searchProductsSemantic({
       query: query || '',
       category: category || undefined,
-      inStock: true,
-    });
+      inStock: in_stock_only === true,
+    }, limit);
     return {
       found: results.length > 0,
       count: results.length,

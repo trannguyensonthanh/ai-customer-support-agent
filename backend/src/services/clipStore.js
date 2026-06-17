@@ -37,14 +37,21 @@ export async function initClipStore() {
 
     for (const p of products) {
       if (!p.image) continue;
+      // Skip if already embedded
+      if (p.clipEmbedding && p.clipEmbedding.length > 0) {
+        embeddedCount++;
+        continue;
+      }
       try {
         // Doc anh tu URL (do du an dang xai link Unsplash)
         const image = await RawImage.fromURL(p.image);
         const inputs = await processor(image);
         const { image_embeds } = await visionModel(inputs);
         
-        // Luu vector embedding (array 512 chieu) vao product
-        p.clipEmbedding = Array.from(image_embeds.data);
+        // Luu vector embedding (array 512 chieu) vao product va xuong o dia
+        const embedding = Array.from(image_embeds.data);
+        p.clipEmbedding = embedding;
+        productStore.update(p.id, { clipEmbedding: embedding });
         embeddedCount++;
       } catch (err) {
         console.warn(`[clip] Lỗi khi embed ảnh sản phẩm ${p.code}:`, err.message);

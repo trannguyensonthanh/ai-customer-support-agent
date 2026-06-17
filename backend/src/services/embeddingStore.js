@@ -1,6 +1,6 @@
 import { ai } from '../lib/gemini.js';
 import { config } from '../config/env.js';
-import { faqStore } from '../db/store.js';
+import { faqStore, productStore } from '../db/store.js';
 import { embedContentProvider } from '../lib/llmProvider.js';
 
 // RAG dua tren FAQ luu trong CSDL. Embedding duoc luu kem moi FAQ.
@@ -158,4 +158,80 @@ export async function searchKnowledgeBase(query, topK = 3) {
 
 export function isKnowledgeBaseReady() {
   return ready;
+}
+
+// ====== SEMANTIC PRODUCT SEARCH ======
+export async function syncProductEmbeddings() {
+  try {
+    const products = productStore.all();
+    let embedded = 0;
+    for (const p of products) {
+      if (!p.embedding) {
+        const text = `${p.name}\n${p.description}\n${p.specs || ''}\n${(p.tags || []).join(', ')}`;
+        const v = await embed(text);
+        productStore.update(p.id, { embedding: v });
+        embedded++;
+      }
+    }
+    if (embedded) console.log(`[rag] Da embed them ${embedded} san pham. RAG San pham: BAT.`);
+  } catch (err) {
+    console.warn(`[rag] Loi embed san pham: ${err.message}`);
+  }
+}
+
+export async function searchProductsSemantic({ query, category, minPrice, maxPrice, inStock }, topK = 5) {
+  let products = productStore.all();
+  
+  // 1. Áp dụng các filter cứng trước
+  // 1. Áp dụng các filter cứng trước
+  if (category) {
+    const validCategories = ['điện tử', 'gia dụng', 'thời trang', 'phụ kiện', 'làm đẹp'];
+    const normalizeCat = (c) => c.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const catNorm = normalizeCat(category);
+    
+    // Tìm category chuẩn tương ứng
+    const matchedCategory = validCategories.find(c => normalizeCat(c) === catNorm);
+    
+    if (matchedCategory) {
+      products = products.filter(p => normalizeCat(p.category) === catNorm);
+    } else {
+      query = (query ? query + ' ' : '') + category; // Nếu AI bịa category, gom chung vào query để tìm ngữ nghĩa
+    }
+  }
+  if (minPrice != null) products = products.filter(p => p.price >= minPrice);
+  if (maxPrice != null) products = products.filter(p => p.price <= maxPrice);
+  if (inStock) products = products.filter(p => p.stock > 0);
+
+  if (!query || !query.trim()) {
+    // Nếu không có query ngữ nghĩa, chỉ trả về theo filter (sort ngẫu nhiên hoặc mặc định)
+    return products.slice(0, topK);
+  }
+
+  // 2. Nếu có query, nhúng câu query và tính Cosine Similarity
+  try {
+    const qv = await embed(query);
+    const scored = products.map(p => {
+      let score = 0;
+      if (p.embedding) {
+        score = cosine(qv, p.embedding);
+      } else {
+        // Fallback BM25/keyword nếu sản phẩm lỡ mất embedding
+        const tokens = tokenize(query);
+        const nameDesc = (p.name + " " + p.description).toLowerCase();
+        score = tokens.filter(t => nameDesc.includes(t)).length * 0.1; 
+      }
+      return { p, score };
+    });
+
+    // Lọc bỏ kết quả quá rác (score < 0.2)
+    return scored
+      .filter(s => s.score > 0.2)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, topK)
+      .map(s => s.p);
+  } catch (err) {
+    console.warn(`[rag] Lỗi semantic search sản phẩm, fallback keyword: ${err.message}`);
+    // Fallback sang keyword search
+    return productStore.search({ query, category, minPrice, maxPrice, inStock }).slice(0, topK);
+  }
 }

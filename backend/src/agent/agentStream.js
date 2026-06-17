@@ -4,6 +4,7 @@ import { functionDeclarations, executors } from './tools.js';
 import { generateContentProvider, generateContentStreamProvider } from '../lib/llmProvider.js';
 import { analyzeSentiment } from '../services/sentimentService.js';
 import { searchByImageBuffer } from '../services/clipStore.js';
+import { productStore, orderStore } from '../db/store.js';
 
 const MAX_STEPS = 6;
 const CONFIDENCE_THRESHOLD = 50; // Duoi nguong nay -> tu dong escalate
@@ -120,7 +121,20 @@ export async function runAgentStream({
     let fullText = '';
 
     for await (const chunk of stream) {
-      const delta = chunk.text;
+      // Trích xuất thủ công từ parts để tránh cảnh báo "there are non-text parts" của Gemini SDK
+      let delta = '';
+      if (chunk.candidates?.[0]?.content?.parts) {
+        for (const p of chunk.candidates[0].content.parts) {
+          if (p.text) {
+            delta += p.text;
+          }
+          if (p.functionCall) {
+            calls.push(p.functionCall);
+            callParts.push(p);
+          }
+        }
+      }
+
       if (delta) {
         fullText += delta;
         // Stream text nhung bo cac tag an
@@ -129,14 +143,6 @@ export async function runAgentStream({
           .replace(/<!--FOLLOWUPS:\[.*?\]-->/g, '');
         if (cleanDelta) {
           emit('delta', { text: cleanDelta });
-        }
-      }
-      if (chunk.candidates?.[0]?.content?.parts) {
-        for (const p of chunk.candidates[0].content.parts) {
-          if (p.functionCall) {
-            calls.push(p.functionCall);
-            callParts.push(p);
-          }
         }
       }
     }
@@ -149,6 +155,7 @@ export async function runAgentStream({
 
       const responseParts = [];
       for (const call of calls) {
+        console.log(`[agentStream] Tool call: ${call.name}`, JSON.stringify(call.args));
         toolsUsed.push(call.name);
         emit('tool', { name: call.name });
 
@@ -198,8 +205,29 @@ export async function runAgentStream({
     const followUps = parseFollowUps(fullText);
     const cleanText = cleanResponse(fullText);
 
-    // Luu vao history (text da lam sach)
-    history.push({ role: 'model', parts: [{ text: cleanText }] });
+    // --- GROUNDING SELF-CHECK ---
+    let correctionText = '';
+    const codeRegex = /\b(?:SP|PK|GD|TT|LD|DH)\d{3,}\b/g;
+    const matches = cleanText.match(codeRegex);
+    if (matches) {
+      for (const code of new Set(matches)) {
+        if (code.startsWith('DH')) {
+          if (!orderStore.byCode(code)) correctionText += `\n- Mã đơn hàng ${code} không tồn tại trong hệ thống.`;
+        } else {
+          if (!productStore.byCode(code)) correctionText += `\n- Mã sản phẩm ${code} không tồn tại trong hệ thống.`;
+        }
+      }
+    }
+
+    let finalText = cleanText;
+    if (correctionText) {
+      const msg = `\n\n[Hệ thống tự động kiểm chứng]: Trợ lý AI vừa đề cập đến thông tin chưa chính xác:${correctionText}\nXin lỗi quý khách vì sự nhầm lẫn này.`;
+      emit('delta', { text: msg });
+      finalText += msg;
+    }
+
+    // Luu vao history (text da lam sach + dinh chinh neu co)
+    history.push({ role: 'model', parts: [{ text: finalText }] });
 
     // Gui follow-ups cho frontend
     if (followUps.length > 0) {
@@ -209,8 +237,16 @@ export async function runAgentStream({
     // Gui confidence cho frontend (de hien thi indicator neu can)
     emit('confidence', { score: confidence });
 
-    // Proactive Escalation giờ được handle ở system prompt.
-    // Nếu AI gọi tool escalate_to_human, logic ở đoạn duyệt calls sẽ xử lý.
+    // Proactive Escalation fallback (ngoài việc AI tự gọi tool)
+    if (!escalated && (confidence < CONFIDENCE_THRESHOLD || sentiment.wantsHuman || sentiment.label === 'angry')) {
+      escalated = true;
+      escalationInfo = { 
+        reason: sentiment.wantsHuman ? 'Khách yêu cầu gặp nhân viên' : 
+               (sentiment.label === 'angry' ? 'Khách hàng bức xúc' : 'AI độ tự tin thấp') 
+      };
+      emit('delta', { text: '\n\n[Hệ thống] Nhận thấy vấn đề cần hỗ trợ chuyên sâu, hệ thống đang kết nối bạn với nhân viên CSKH...' });
+      emit('escalated', escalationInfo);
+    }
 
     // Tao summary khi escalation
     if (escalated) {

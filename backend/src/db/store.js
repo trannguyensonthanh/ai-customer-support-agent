@@ -166,6 +166,7 @@ export const productStore = {
     }
     return null;
   },
+  update: (id, patch) => db.products.update(id, patch),
   categories: () => [...new Set(db.products.all().map((p) => p.category))],
 };
 
@@ -212,8 +213,19 @@ export const orderStore = {
     db.orders.update(order.id, { status: 'Đã hủy', cancelReason: reason || '', timeline });
     // Hoan lai ton kho
     for (const item of order.items || []) {
-      const prod = productStore.byCode ? null : null; // skip if no product code
-      // Ton kho se duoc xu ly rieng neu can
+      const qty = item.qty || 1;
+      let pId = item.productId;
+      if (!pId) {
+        // Thu tim qua code hoac ten neu data seed cu
+        const all = db.products.all();
+        const p = item.code 
+          ? all.find(x => x.code === item.code)
+          : all.find(x => x.name === item.name);
+        if (p) pId = p.id;
+      }
+      if (pId) {
+        productStore.updateStock(pId, qty);
+      }
     }
     return { success: true, message: `Đơn ${code} đã được hủy thành công.`, order: { ...order, status: 'Đã hủy' } };
   },

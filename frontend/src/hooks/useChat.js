@@ -23,6 +23,17 @@ const welcome = () => ({
   ts: Date.now(),
 });
 
+function getSavedSessions() {
+  try {
+    const raw = localStorage.getItem('sv_chat_sessions');
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveSessions(sessions) {
+  localStorage.setItem('sv_chat_sessions', JSON.stringify(sessions));
+}
+
 export function useChat() {
   const [messages, setMessages] = useState([welcome()]);
   const [status, setStatus] = useState('idle');
@@ -30,6 +41,10 @@ export function useChat() {
   const [humanMode, setHumanMode] = useState(false);
   const [followUps, setFollowUps] = useState([]);
   const [agentTyping, setAgentTyping] = useState(false);
+  
+  const [sessionsList, setSessionsList] = useState([]);
+  const [activeSessionId, setActiveSessionId] = useState(null);
+
   const sessionRef = useRef(null);
   const escalatedRef = useRef(false);
   const humanRef = useRef(false);
@@ -37,9 +52,13 @@ export function useChat() {
 
   // Load lich su chat khi khoi tao
   useEffect(() => {
+    const list = getSavedSessions();
+    setSessionsList(list);
+    
     const savedSessionId = localStorage.getItem('sv_chat_session');
     if (savedSessionId) {
       sessionRef.current = savedSessionId;
+      setActiveSessionId(savedSessionId);
       import('../lib/api.js').then(({ fetchChatHistory }) => {
         fetchChatHistory(savedSessionId).then((history) => {
           if (history && history.length > 0) {
@@ -69,18 +88,26 @@ export function useChat() {
     const onClosed = () => append({ role: 'system', text: 'Nhân viên đã kết thúc hỗ trợ. Cảm ơn bạn!' });
     const onAgentTyping = () => setAgentTyping(true);
     const onAgentStopTyping = () => setAgentTyping(false);
+    const onReturnToAi = () => {
+      escalatedRef.current = false;
+      humanRef.current = false;
+      setEscalated(false);
+      setHumanMode(false);
+    };
 
     s.on('agent_takeover', onTakeover);
     s.on('agent_message', onAgentMsg);
     s.on('conversation_closed', onClosed);
     s.on('agent_typing', onAgentTyping);
     s.on('agent_stop_typing', onAgentStopTyping);
+    s.on('return_to_ai', onReturnToAi);
     return () => {
       s.off('agent_takeover', onTakeover);
       s.off('agent_message', onAgentMsg);
       s.off('conversation_closed', onClosed);
       s.off('agent_typing', onAgentTyping);
       s.off('agent_stop_typing', onAgentStopTyping);
+      s.off('return_to_ai', onReturnToAi);
     };
   }, []);
 
@@ -101,7 +128,7 @@ export function useChat() {
         socketRef.current?.emit('customer:typing', { sessionId: sessionRef.current });
       }
 
-      // Che do nhan vien: gui qua socket, khong goi AI
+      // Che do nhan viên: gui qua socket, khong goi AI
       if (humanRef.current) {
         socketRef.current?.emit('customer:message', { sessionId: sessionRef.current, text });
         socketRef.current?.emit('customer:stop_typing', { sessionId: sessionRef.current });
@@ -126,6 +153,14 @@ export function useChat() {
           {
             meta: (d) => {
               if (d.sessionId) {
+                if (sessionRef.current !== d.sessionId) {
+                  // Save new session to list
+                  const newTitle = text ? (text.length > 30 ? text.slice(0, 30) + '...' : text) : 'Chat mới';
+                  const newList = [{ id: d.sessionId, title: newTitle, updatedAt: Date.now() }, ...getSavedSessions()];
+                  saveSessions(newList);
+                  setSessionsList(newList);
+                  setActiveSessionId(d.sessionId);
+                }
                 sessionRef.current = d.sessionId;
                 localStorage.setItem('sv_chat_session', d.sessionId);
                 socketRef.current?.emit('customer:join', { sessionId: d.sessionId });
@@ -168,9 +203,47 @@ export function useChat() {
   const cancelEscalation = useCallback(() => {
     if (!escalated && !humanMode) return;
     socketRef.current?.emit('customer:cancel_escalation', { sessionId: sessionRef.current });
+    escalatedRef.current = false;
+    humanRef.current = false;
     setEscalated(false);
     setHumanMode(false);
   }, [escalated, humanMode]);
 
-  return { messages, status, escalated, humanMode, followUps, agentTyping, send, requestRating, cancelEscalation };
+  const startNewSession = useCallback(() => {
+    sessionRef.current = null;
+    setActiveSessionId(null);
+    localStorage.removeItem('sv_chat_session');
+    setMessages([welcome()]);
+    setEscalated(false);
+    setHumanMode(false);
+    escalatedRef.current = false;
+    humanRef.current = false;
+    setFollowUps([]);
+  }, []);
+
+  const switchSession = useCallback((sessionId) => {
+    sessionRef.current = sessionId;
+    setActiveSessionId(sessionId);
+    localStorage.setItem('sv_chat_session', sessionId);
+    setEscalated(false);
+    setHumanMode(false);
+    escalatedRef.current = false;
+    humanRef.current = false;
+    setFollowUps([]);
+    setMessages([welcome()]); // Tạm thời hiện welcome trong lúc chờ load
+    import('../lib/api.js').then(({ fetchChatHistory }) => {
+      fetchChatHistory(sessionId).then((history) => {
+        if (history && history.length > 0) {
+          setMessages([welcome(), ...history]);
+        }
+      });
+    });
+    socketRef.current?.emit('customer:join', { sessionId });
+  }, []);
+
+  return { 
+    messages, status, escalated, humanMode, followUps, agentTyping, 
+    send, requestRating, cancelEscalation,
+    sessionsList, activeSessionId, startNewSession, switchSession
+  };
 }

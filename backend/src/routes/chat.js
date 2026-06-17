@@ -64,9 +64,9 @@ chatRouter.post('/chat/stream', async (req, res) => {
 
   const customerContext = getCustomerContext(req);
   
-  // 1. Neu user da dang nhap, ghi de sessionId thanh ID cua user
-  // De dam bao tat ca cac trinh duyet/thiet bi deu dung chung 1 lich su
-  const resolvedSessionId = customerContext ? `cust_${customerContext.id}` : sessionId;
+  // Giữ nguyên sessionId từ frontend (mỗi thiết bị 1 session riêng)
+  // Không dùng chung `cust_${id}` để tránh loạn lịch sử khi chat nhiều nơi
+  const resolvedSessionId = sessionId;
 
   const { id, session } = getOrCreateSession(resolvedSessionId);
   const conv = conversationStore.ensure(id, customerContext?.name ? `${customerContext.name}` : undefined, customerContext?.id);
@@ -76,19 +76,28 @@ chatRouter.post('/chat/stream', async (req, res) => {
     conversationStore.update(conv.id, { label: customerContext.name, customerId: customerContext.id });
   }
 
-  // 2. Hydrate (Phuc hoi) lich su tu Database vao RAM neu server vua khoi dong lai
-  if (session.history.length === 0) {
-    const pastMessages = messageStore.byConversation(conv.id);
-    if (pastMessages && pastMessages.length > 0) {
-      // Chi lay toi da 10 tin nhan gan nhat de tranh qua tai Context cua LLM
-      const recentMessages = pastMessages.slice(-10);
-      for (const m of recentMessages) {
-        // convert DB format to Gemini API format
-        session.history.push({
-          role: m.role === 'ai' ? 'model' : m.role,
-          parts: [{ text: m.content }]
-        });
+  // Luôn hydrate (phục hồi) lịch sử từ Database để AI thấy được những tin nhắn nhân viên đã chat
+  session.history = [];
+  const pastMessages = messageStore.byConversation(conv.id);
+  if (pastMessages && pastMessages.length > 0) {
+    const recentMessages = pastMessages.slice(-15);
+    for (const m of recentMessages) {
+      let role = m.role === 'ai' ? 'model' : m.role;
+      let text = m.content;
+      
+      // Xử lý các role không hợp lệ của Gemini
+      if (m.role === 'human') {
+        role = 'model';
+        text = `[Nhân viên CSKH]: ${m.content}`;
+      } else if (m.role === 'system') {
+        role = 'user';
+        text = `[Hệ thống]: ${m.content}`;
       }
+      
+      session.history.push({
+        role,
+        parts: [{ text }]
+      });
     }
   }
 
@@ -186,8 +195,7 @@ chatRouter.get('/health', (_req, res) => {
 
 // GET /api/chat/history/:sessionId
 chatRouter.get('/chat/history/:sessionId', (req, res) => {
-  const customerContext = getCustomerContext(req);
-  const resolvedSessionId = customerContext ? `cust_${customerContext.id}` : req.params.sessionId;
+  const resolvedSessionId = req.params.sessionId;
 
   const conv = conversationStore.bySession(resolvedSessionId);
   if (!conv) return res.json({ messages: [] });

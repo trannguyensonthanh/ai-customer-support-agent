@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext.jsx';
 import { adminApi } from '../lib/adminApi.js';
 import { createAgentSocket } from './agentSocket.js';
+import MarkdownText from '../components/MarkdownText.jsx';
 
 const STATUS = {
   bot: { label: 'AI đang xử lý', cls: 'bg-brand-50 text-brand-600' },
@@ -13,23 +14,32 @@ const STATUS = {
 
 function Bubble({ m }) {
   if (m.role === 'system') {
-    return <div className="my-1 text-center text-xs text-muted">{m.content}</div>;
+    return <div className="my-3 text-center text-xs font-medium text-muted bg-line/30 rounded-full px-3 py-1 w-max mx-auto">{m.content}</div>;
   }
+  
   const isAgent = m.role === 'human';
   const isCustomer = m.role === 'user';
+  const isAi = !isAgent && !isCustomer;
+
   return (
-    <div className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex w-full mb-4 ${isAgent ? 'justify-end' : 'justify-start'}`}>
+      {!isAgent && (
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-3 mt-1 shadow-sm ${isAi ? 'bg-brand text-white' : 'bg-surface text-brand font-bold border border-brand-100'}`}>
+          {isAi ? 'AI' : 'KH'}
+        </div>
+      )}
       <div
-        className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
+        className={`relative max-w-[75%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed shadow-sm ${
           isCustomer
-            ? 'bg-paper text-ink'
+            ? 'bg-surface text-ink border border-line rounded-tl-sm'
             : isAgent
-              ? 'bg-brand text-white'
-              : 'border border-line bg-surface text-ink'
+              ? 'bg-brand text-white rounded-tr-sm'
+              : 'bg-brand-50 text-ink border border-brand-100 rounded-tl-sm'
         }`}
       >
-        {!isCustomer && !isAgent && <div className="mb-0.5 text-[11px] font-semibold text-brand-600">AI</div>}
-        {m.content}
+        {isAi && <div className="mb-1 text-[11px] font-bold text-brand-600 uppercase tracking-wider">Trợ lý AI</div>}
+        {isCustomer && <div className="mb-1 text-[11px] font-bold text-muted uppercase tracking-wider">Khách hàng</div>}
+        <MarkdownText text={m.content || ''} />
       </div>
     </div>
   );
@@ -109,6 +119,11 @@ export default function Conversations() {
     setSelected((prev) => ({ ...prev, conversation: { ...prev.conversation, status: 'closed' } }));
   };
 
+  const returnToAi = () => {
+    socketRef.current?.emit('agent:return_to_ai', { conversationId: conv.id });
+    setSelected((prev) => ({ ...prev, conversation: { ...prev.conversation, status: 'bot' } }));
+  };
+
   return (
     <div className="flex h-screen">
       {/* Danh sach hoi thoai */}
@@ -158,6 +173,11 @@ export default function Conversations() {
                 </div>
               </div>
               <div className="flex gap-2">
+                {conv.status === 'human' && (
+                  <button onClick={returnToAi} className="rounded-lg border border-line px-3 py-1.5 text-xs text-brand hover:bg-brand-50">
+                    Chuyển lại AI
+                  </button>
+                )}
                 {conv.status !== 'human' && conv.status !== 'closed' && (
                   <button onClick={takeOver} className="rounded-lg bg-agent px-3 py-1.5 text-xs font-medium text-white hover:bg-agent-600">
                     Tiếp quản
@@ -171,12 +191,12 @@ export default function Conversations() {
               </div>
             </div>
 
-            <div className="scroll-soft flex-1 space-y-2 overflow-y-auto px-5 py-4">
+            <div className="scroll-soft flex-1 overflow-y-auto p-5 bg-[#f0f2f5]">
               {selected.messages.map((m) => <Bubble key={m.id} m={m} />)}
               <div ref={endRef} />
             </div>
 
-            <div className="border-t border-line bg-surface px-4 py-3">
+            <div className="border-t border-line bg-surface px-4 py-3 shadow-[0_-4px_10px_rgba(0,0,0,0.02)] z-10">
               {conv.status === 'human' ? (
                 <div className="flex gap-2">
                   <input

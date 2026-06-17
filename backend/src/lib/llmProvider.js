@@ -62,6 +62,7 @@ export async function generateContentStreamProvider({ contents, config: genConfi
           messages,
           tools,
           stream: true,
+          keep_alive: '1h',
           options: {
             temperature: genConfig.temperature || 0.4
           }
@@ -144,6 +145,7 @@ export async function generateContentProvider({ contents, config: genConfig }) {
           messages,
           tools,
           stream: false,
+          keep_alive: '1h',
           options: {
             temperature: genConfig.temperature || 0.4
           }
@@ -195,6 +197,7 @@ export async function embedContentProvider(text) {
         body: JSON.stringify({
           model: settings.ollamaEmbedModel,
           prompt: text,
+          keep_alive: '1h'
         })
       });
       if (!response.ok) throw new Error(`Ollama error: ${response.statusText}`);

@@ -4,12 +4,17 @@ import ChatHeader from './ChatHeader.jsx';
 import MessageList from './MessageList.jsx';
 import QuickReplies from './QuickReplies.jsx';
 import ChatInput from './ChatInput.jsx';
+import ChatHistoryList from './ChatHistoryList.jsx';
 import { ChatIcon } from './icons.jsx';
 
 export default function ChatWidget() {
   const [open, setOpen] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [language, setLanguage] = useState('vi');
-  const { messages, status, escalated, humanMode, followUps, send, requestRating, cancelEscalation } = useChat();
+  const { 
+    messages, status, escalated, humanMode, followUps, send, requestRating, cancelEscalation,
+    sessionsList, activeSessionId, startNewSession, switchSession
+  } = useChat();
 
   const busy = status !== 'idle';
   const showQuick = messages.filter((m) => m.role === 'user').length === 0;
@@ -44,29 +49,48 @@ export default function ChatWidget() {
             onRate={requestRating}
             onClose={() => setOpen(false)}
             onCancelEscalation={cancelEscalation}
+            onToggleHistory={() => setShowHistory(!showHistory)}
+            onNewChat={() => {
+              startNewSession();
+              setShowHistory(false);
+            }}
           />
-          <MessageList messages={messages} />
           
-          {/* Quick Replies for empty chat */}
-          {showQuick && <QuickReplies onPick={handleSend} disabled={busy} />}
-          
-          {/* AI Suggested Follow-ups */}
-          {!showQuick && followUps?.length > 0 && !busy && (
-            <div className="flex flex-wrap gap-2 px-4 py-2 border-t border-line bg-surface anim-fadeup">
-              {followUps.map((text, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleSend(text)}
-                  disabled={busy}
-                  className="rounded-full border border-brand-50 bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-600 transition hover:border-brand hover:bg-brand hover:text-white"
-                >
-                  {text}
-                </button>
-              ))}
-            </div>
-          )}
+          {showHistory ? (
+            <ChatHistoryList 
+              sessions={sessionsList} 
+              activeId={activeSessionId} 
+              onSelect={(id) => {
+                switchSession(id);
+                setShowHistory(false);
+              }} 
+            />
+          ) : (
+            <>
+              <MessageList messages={messages} />
+              
+              {/* Quick Replies for empty chat */}
+              {showQuick && <QuickReplies onPick={handleSend} disabled={busy} />}
+              
+              {/* AI Suggested Follow-ups */}
+              {!showQuick && followUps?.length > 0 && !busy && (
+                <div className="flex flex-wrap gap-2 px-4 py-2 border-t border-line bg-surface anim-fadeup">
+                  {followUps.map((text, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleSend(text)}
+                      disabled={busy}
+                      className="rounded-full border border-brand-50 bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-600 transition hover:border-brand hover:bg-brand hover:text-white"
+                    >
+                      {text}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-          <ChatInput onSend={handleSend} disabled={busy} />
+              <ChatInput onSend={handleSend} disabled={busy} />
+            </>
+          )}
         </div>
       )}
     </>

@@ -30,7 +30,7 @@ export default function LoginPage() {
         const data = await login(form.email, form.password);
         const role = data.role || 'customer';
         if (role === 'admin' || role === 'agent') {
-          navigate('/admin');
+          window.location.href = '/admin';
         } else {
           navigate('/');
         }
