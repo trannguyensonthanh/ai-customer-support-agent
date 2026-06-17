@@ -49,15 +49,7 @@ function convertToOllamaTools(geminiFunctionDeclarations) {
 export async function generateContentStreamProvider({ contents, config: genConfig }) {
   const settings = getLlmSettings();
 
-  if (settings.provider === 'gemini') {
-    // Standard Gemini API
-    return await ai.models.generateContentStream({
-      model: config.model,
-      contents,
-      config: genConfig,
-    });
-  } else {
-    // Offline / Local LLMs via Ollama
+  async function callOllama() {
     const messages = convertToOllamaMessages(contents, genConfig.systemInstruction);
     const tools = genConfig.tools && genConfig.tools[0] ? convertToOllamaTools(genConfig.tools[0].functionDeclarations) : undefined;
     
@@ -80,7 +72,6 @@ export async function generateContentStreamProvider({ contents, config: genConfi
         throw new Error(`Ollama error: ${response.statusText}`);
       }
 
-      // Generator to yield chunks like Gemini
       async function* parseOllamaStream() {
         const decoder = new TextDecoder('utf-8');
         let buffer = '';
@@ -113,26 +104,34 @@ export async function generateContentStreamProvider({ contents, config: genConfi
       return parseOllamaStream();
     } catch (err) {
       console.error('[Ollama] Loi goi local LLM:', err.message);
-      // Fallback generator
       async function* errorGen() {
-        yield { text: `[HỆ THỐNG OFFLINE] Xin lỗi, AI Local (${settings.ollamaModel}) hiện không phản hồi. Vui lòng kiểm tra lại server Ollama hoặc chuyển sang dùng Gemini.` };
+        yield { text: `[HỆ THỐNG] Xin lỗi, AI hiện đang gặp sự cố kết nối. Vui lòng thử lại sau.` };
       }
       return errorGen();
     }
+  }
+
+  if (settings.provider === 'gemini') {
+    try {
+      return await ai.models.generateContentStream({
+        model: config.model,
+        contents,
+        config: genConfig,
+      });
+    } catch (err) {
+      console.warn('[Gemini] Loi goi API (co the het token):', err.message);
+      console.warn('[Gemini] -> FALLBACK: Tu dong chuyen sang Local LLM (Ollama).');
+      return callOllama();
+    }
+  } else {
+    return callOllama();
   }
 }
 
 export async function generateContentProvider({ contents, config: genConfig }) {
   const settings = getLlmSettings();
 
-  if (settings.provider === 'gemini') {
-    return await ai.models.generateContent({
-      model: config.model,
-      contents,
-      config: genConfig,
-    });
-  } else {
-    // Offline via Ollama (stream: false)
+  async function callOllama() {
     const messages = convertToOllamaMessages(contents, genConfig.systemInstruction);
     const tools = genConfig.tools && genConfig.tools[0] ? convertToOllamaTools(genConfig.tools[0].functionDeclarations) : undefined;
     
@@ -164,21 +163,31 @@ export async function generateContentProvider({ contents, config: genConfig }) {
       return out;
     } catch (err) {
       console.error('[Ollama] Loi goi local LLM:', err.message);
-      return { text: '[LỖI OFFLINE] Không thể kết nối đến Ollama.' };
+      return { text: '[HỆ THỐNG] Không thể kết nối đến AI.' };
     }
+  }
+
+  if (settings.provider === 'gemini') {
+    try {
+      return await ai.models.generateContent({
+        model: config.model,
+        contents,
+        config: genConfig,
+      });
+    } catch (err) {
+      console.warn('[Gemini] Loi goi API:', err.message);
+      console.warn('[Gemini] -> FALLBACK: Tu dong chuyen sang Local LLM (Ollama).');
+      return callOllama();
+    }
+  } else {
+    return callOllama();
   }
 }
 
 export async function embedContentProvider(text) {
   const settings = getLlmSettings();
 
-  if (settings.provider === 'gemini') {
-    const result = await ai.models.embedContent({
-      model: config.embedModel,
-      contents: text,
-    });
-    return result.embeddings[0].values;
-  } else {
+  async function callOllama() {
     try {
       const response = await fetch(`${settings.ollamaUrl}/api/embeddings`, {
         method: 'POST',
@@ -193,8 +202,23 @@ export async function embedContentProvider(text) {
       return data.embedding;
     } catch (err) {
       console.error('[Ollama] Loi tao embedding:', err.message);
-      // Return a dummy vector if failed (e.g. 768 dimensions for nomic)
       return Array(768).fill(0);
     }
+  }
+
+  if (settings.provider === 'gemini') {
+    try {
+      const result = await ai.models.embedContent({
+        model: config.embedModel,
+        contents: text,
+      });
+      return result.embeddings[0].values;
+    } catch (err) {
+      console.warn('[Gemini] Loi tao embedding:', err.message);
+      console.warn('[Gemini] -> FALLBACK: Tu dong chuyen sang Local LLM (Ollama).');
+      return callOllama();
+    }
+  } else {
+    return callOllama();
   }
 }

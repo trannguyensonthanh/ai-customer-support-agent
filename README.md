@@ -1,108 +1,157 @@
-# AI Agent hỗ trợ chăm sóc khách hàng — ShopViệt
-
-Hệ thống **AI Agent CSKH hoàn chỉnh**: chatbot AI trả lời FAQ, hỗ trợ tra cứu đơn hàng,
-tự động chuyển nhân viên, kèm **trang quản trị, phân tích số liệu và tiếp quản trực tiếp (live takeover)**.
-
-> **Đã hoàn thành Tăng 1 + 2 + 3** — toàn bộ đã được build & test (chỉ phần gọi Gemini cần API key của bạn).
-
----
-
-## ✨ Tính năng
-
-### Đủ 4 yêu cầu đề bài + nâng cấp
-| Yêu cầu | Trạng thái | Nâng cấp |
-|---|---|---|
-| Tạo chatbot AI | ✅ | UI đẹp, streaming thật, gửi ảnh, đa ngôn ngữ |
-| Trả lời FAQ | ✅ | RAG (embedding) + quản lý FAQ ở trang admin |
-| Hỗ trợ đơn hàng | ✅ | Function calling + thẻ đơn hàng có timeline |
-| Chuyển tiếp nhân viên | ✅ | Tự động escalation + **live takeover realtime** |
-
-### Các tầng nâng cấp
-- **Tăng 1:** Agent với function calling, RAG, escalation.
-- **Tăng 2:** Streaming (SSE), thẻ đơn hàng + timeline, gửi ảnh (multimodal), CSAT, đa ngôn ngữ VI/EN.
-- **Tăng 3 (full):**
-  - **CSDL bền vững** (kho JSON, tách tầng repository — đổi sang PostgreSQL dễ dàng).
-  - **Đăng nhập phân quyền** (JWT + bcrypt) cho nhân viên/admin.
-  - **Trang Admin:** Tổng quan (analytics + biểu đồ), Hội thoại (live takeover), Quản lý FAQ (CRUD, AI tự embed lại), Ticket.
-  - **Realtime Socket.io:** nhân viên tiếp quản đúng cuộc chat AI đang xử lý; tin nhắn 2 chiều tức thì.
-  - **Analytics:** tỷ lệ AI tự giải quyết, tỷ lệ escalation, CSAT trung bình, lưu lượng 7 ngày, câu hỏi hàng đầu.
+<div align="center">
+  <img src="https://raw.githubusercontent.com/tandp53/3T-Edu-Tech/main/logo.png" alt="Logo" width="120" style="border-radius: 12px" />
+  <h1>🤖 3T Store - AI Customer Service Agent</h1>
+  <p><em>Hệ thống trợ lý ảo chăm sóc khách hàng thông minh tích hợp ReAct Agent, RAG và Local LLM Fallback</em></p>
+</div>
 
 ---
 
-## 🧱 Công nghệ
-- **Frontend:** React 18 + Vite + Tailwind CSS v4 + React Router + Recharts + Socket.io-client
-- **Backend:** Node.js + Express (ESM) + Socket.io + JWT
-- **AI:** Google Gemini (`@google/genai`) — chat streaming + embedding (RAG) + multimodal
-- **CSDL:** Kho JSON bền vững (mặc định, chạy ngay) · PostgreSQL + pgvector + Redis (tùy chọn production)
+## ✨ Điểm nổi bật (Key Features)
+
+Hệ thống được thiết kế theo cấu trúc **Agentic Workflow** hiện đại, kết hợp sức mạnh của Cloud AI và Local AI để đảm bảo tính sẵn sàng cao nhất:
+
+- 🧠 **Cơ chế ReAct (Reasoning & Acting)**: AI không chỉ trả lời theo văn bản mà còn biết "suy nghĩ" để chọn gọi các công cụ (Tools) phù hợp như: *Tra cứu đơn hàng*, *Hủy đơn hàng*, *Tìm kiếm sản phẩm bằng Hình ảnh (CLIP Vector)*.
+- 🔄 **Double Fallback Architecture**: Hoạt động mặc định với **Google Gemini API** (tốc độ cao). Nếu Gemini hết token hoặc lỗi mạng, hệ thống tự động fallback sang **Local LLMs (Ollama - Qwen2.5/Llama3)** một cách mượt mà mà không làm sập ứng dụng.
+- 📚 **RAG (Retrieval-Augmented Generation)**: Admin có thể tải lên file PDF chính sách/FAQ. Hệ thống tự động trích xuất, tạo Vector Embedding và lưu trữ. Khi khách hàng hỏi, AI sẽ dùng RAG để trả lời chính xác dựa trên tài liệu nội bộ.
+- 👁️ **Visual Search (Image to Text)**: Khách hàng có thể gửi hình ảnh sản phẩm. Hệ thống sử dụng mô hình AI (CLIP) để phân tích ảnh và tìm ra các sản phẩm tương đồng nhất trong kho.
+- 🛡️ **Bảo mật dữ liệu (Data Isolation)**: Công cụ của Agent chỉ cho phép tra cứu đơn hàng của chính user đang đăng nhập (Customer Context). Các hành vi cố tình tra cứu mã đơn hàng của người khác sẽ bị AI từ chối.
+- 📊 **Admin Dashboard Cao Cấp**: Giao diện quản trị hiện đại, cho phép quản lý Sản phẩm, Đơn hàng, FAQ, cấu hình AI trực tiếp (chuyển đổi Online/Offline) và xem biểu đồ phân tích tin nhắn.
 
 ---
 
-## 🚀 Cách chạy
-Cần **Node.js >= 18.17** và **API key Gemini miễn phí** (https://aistudio.google.com/apikey).
+## 🛠 Công nghệ sử dụng (Tech Stack)
 
+### Frontend (Giao diện Khách & Quản trị)
+- **Framework**: React.js (Vite)
+- **Styling**: Vanilla CSS (kết hợp các hiệu ứng Glassmorphism, Mesh Gradient hiện đại) + TailwindCSS.
+- **State Management & Routing**: React Router, Context API.
+- **Icons**: Lucide React.
+
+### Backend (Xử lý Logic & AI)
+- **Core**: Node.js & Express.js
+- **AI Integration**: `@google/genai` (Gemini) + Node `fetch` (Ollama REST API).
+- **Realtime**: Socket.IO & SSE (Server-Sent Events) cho hiệu ứng gõ phím của AI.
+- **Data Storage**: Local JSON (Phù hợp cho đồ án, dễ dàng migrate sang MongoDB/PostgreSQL).
+- **PDF Processing**: `pdf-parse`.
+
+---
+
+## 🚀 Hướng dẫn cài đặt (Getting Started)
+
+### 1. Yêu cầu hệ thống (Prerequisites)
+- [Node.js](https://nodejs.org/en/) (phiên bản 18+).
+- [Ollama](https://ollama.com/) (Dành cho tính năng chạy Offline).
+
+### 2. Cấu hình môi trường (Environment Variables)
+Tạo file `.env` trong thư mục `backend/` với nội dung sau:
+
+```env
+PORT=4000
+CORS_ORIGIN=http://localhost:5173
+JWT_SECRET=super_secret_key_3t
+GEMINI_API_KEY=dien_api_key_cua_ban_vao_day
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_EMBED_MODEL=text-embedding-004
+
+# Tài khoản Admin mặc định
+ADMIN_EMAIL=admin@shopviet.vn
+ADMIN_PASSWORD=admin123
+ADMIN_NAME=Quản trị viên
+```
+
+### 3. Cài đặt Dependencies
+Bạn cần mở 2 Terminal để cài đặt cho cả Frontend và Backend.
+
+**Terminal 1 (Backend):**
 ```bash
-# Terminal 1 — backend
 cd backend
 npm install
-cp .env.example .env        # dán GEMINI_API_KEY (và đổi JWT_SECRET nếu muốn)
-npm run dev                 # http://localhost:4000
+```
 
-# Terminal 2 — frontend
+**Terminal 2 (Frontend):**
+```bash
 cd frontend
 npm install
-npm run dev                 # http://localhost:5173
-```
-
-- **Khách hàng:** http://localhost:5173 → bấm “Cần hỗ trợ?”
-- **Quản trị:** http://localhost:5173/admin → đăng nhập `admin@shopviet.vn` / `admin123`
-
-### Thử nghiệm live takeover (rất hay để demo)
-1. Mở 2 tab: tab khách (`/`) và tab admin (`/admin/conversations`).
-2. Ở tab khách, chat vài câu rồi gõ “tôi muốn gặp nhân viên”.
-3. Ở tab admin, hội thoại hiện trạng thái **Chờ nhân viên** → bấm **Tiếp quản** → nhập trả lời.
-4. Tab khách nhận tin nhắn nhân viên ngay lập tức (header đổi sang màu coral).
-
----
-
-## 🔌 API chính
-| Method | Endpoint | Mô tả |
-|---|---|---|
-| POST | `/api/chat/stream` | Chat SSE: `meta · tool · order · delta · escalated · done` |
-| POST | `/api/feedback` | Đánh giá CSAT |
-| POST | `/api/auth/login` | Đăng nhập nhân viên |
-| GET/POST/PUT/DELETE | `/api/admin/faqs` | Quản lý FAQ (cần token) |
-| GET | `/api/admin/conversations` | Danh sách + chi tiết hội thoại |
-| GET/PUT | `/api/admin/tickets` | Quản lý ticket |
-| GET | `/api/admin/analytics` | Số liệu tổng hợp |
-
-**Socket.io:** `customer:join`, `customer:message`, `agent:take`, `agent:message`, `agent:resolve`
-→ phát `agent_takeover`, `agent_message`, `conversation_closed`, `agent:incoming`.
-
----
-
-## 🗂️ Cấu trúc
-```
-backend/src/
-  db/        jsondb.js (kho JSON) · store.js (truy cập dữ liệu + seed)
-  agent/     systemPrompt · tools · agentStream (function calling + streaming)
-  services/  embeddingStore (RAG) · authService
-  realtime/  io.js (Socket.io: live takeover)
-  routes/    chat.js · auth.js · admin.js
-  middleware/auth.js
-frontend/src/
-  Storefront.jsx · components/ (widget khách: OrderCard, RatingCard, ChatWidget...)
-  admin/     AuthContext · AdminLayout · Login · Dashboard · Conversations · Faqs · Tickets
-  hooks/useChat.js · lib/ (api, adminApi, sockets)
 ```
 
 ---
 
-## 🐘 Nâng cấp lên PostgreSQL (tùy chọn)
-Mặc định dùng kho JSON nên **chạy ngay không cần cài gì**. Khi cần production:
+## 💻 Hướng dẫn chạy dự án
+
+### Chạy hệ thống cơ bản (Sử dụng Gemini)
+Khởi động Backend và Frontend cùng lúc:
+
+**Terminal 1 (Backend):**
 ```bash
-docker compose up -d
-psql postgresql://cskh:cskh@localhost:5432/cskh -f backend/db/postgres-schema.sql
+npm run dev
 ```
-Sau đó viết lại `backend/src/db/store.js` bằng thư viện `pg` (giữ nguyên API các `*Store`),
-và có thể dùng Redis adapter cho Socket.io khi chạy nhiều instance. Schema có sẵn ở
-`backend/db/postgres-schema.sql` (kèm cột embedding dạng `jsonb` hoặc `vector` của pgvector).
+
+**Terminal 2 (Frontend):**
+```bash
+npm run dev
+```
+
+Truy cập trang web tại: `http://localhost:5173/`
+
+### Kích hoạt tính năng Offline Fallback (Local LLMs)
+Nếu bạn muốn chạy AI hoàn toàn Offline hoặc test tính năng Fallback khi Gemini lỗi:
+
+1. Tải và cài đặt **Ollama**.
+2. Mở Terminal / CMD và tải các model cần thiết (Khuyên dùng Qwen2.5 14B cho Tiếng Việt và Nomic cho Embedding):
+   ```bash
+   ollama pull qwen2.5:14b
+   ollama pull nomic-embed-text
+   ```
+3. Đăng nhập vào trang Admin của dự án (`http://localhost:5173/admin/login`).
+4. Chuyển đến mục **⚙️ Cài đặt AI**.
+5. Chọn **"Offline (Local LLMs)"**, kiểm tra cổng `11434` và nhấn **Lưu cấu hình**.
+6. Lúc này, mọi hội thoại của khách hàng sẽ được xử lý tại máy tính của bạn thông qua Ollama mà không tốn Token.
+
+---
+
+## 🔑 Tài khoản Demo (Demo Credentials)
+
+**Tài khoản Quản trị (Admin Panel)**
+- **URL**: `http://localhost:5173/admin/login`
+- **Email**: `admin@shopviet.vn`
+- **Password**: `admin123`
+
+**Tài khoản Khách hàng (Customer)**
+- **URL**: `http://localhost:5173/login`
+- **Email**: `an@example.com`
+- **Password**: `123456`
+
+---
+
+## 📂 Cấu trúc thư mục lõi (Core Architecture)
+
+```text
+ai-cskh-agent/
+├── backend/
+│   ├── src/
+│   │   ├── agent/
+│   │   │   ├── agentStream.js   # Luồng xử lý AI ReAct (Gọi tool, trả lời Stream)
+│   │   │   ├── systemPrompt.js  # "Bộ não" tính cách và vai trò của AI
+│   │   │   └── tools.js         # Các công cụ AI có thể dùng (Tra đơn, Hủy đơn...)
+│   │   ├── lib/
+│   │   │   └── llmProvider.js   # Lớp trừu tượng (Adapter) xử lý chuyển đổi Gemini <-> Ollama
+│   │   ├── services/
+│   │   │   ├── embeddingStore.js # Dịch vụ RAG tạo và tìm kiếm Vector FAQ
+│   │   │   └── clipStore.js      # Phân tích hình ảnh sản phẩm
+├── frontend/
+│   ├── src/
+│   │   ├── admin/
+│   │   │   └── Settings.jsx     # Giao diện quản lý cấu hình AI Model (Online/Offline)
+│   │   ├── components/
+│   │   │   └── ChatWidget.jsx   # Khung chat nổi cho Khách hàng
+│   │   └── index.css            # Design System (Mesh Gradients, Glassmorphism)
+```
+
+## 📜 Các kịch bản có thể test (Test Cases)
+1. **RAG & FAQ:** Hỏi về "Chính sách đổi trả" -> AI tự lục file PDF/CSDL để trả lời.
+2. **Vision:** Gửi 1 ảnh sản phẩm -> AI dùng công cụ quét ảnh và báo có sản phẩm nào giống.
+3. **Bảo mật:** Đăng nhập tài khoản An -> Hỏi "Mã đơn hàng ORD-123456 của tôi đâu?" -> Xem AI tra cứu. Sau đó hỏi mã đơn của người khác -> Xem AI từ chối khéo léo.
+4. **Fallback:** Trong Admin, đổi cấu hình sang Offline -> Chat với bot -> Bot sẽ gọi Ollama để trả lời (Có thể dùng CMD gõ `ollama serve` để quan sát log máy chủ Local).
+
+---
+*Phát triển bởi đội ngũ đam mê AI Agent.*

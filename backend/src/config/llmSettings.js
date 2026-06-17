@@ -6,7 +6,7 @@ const SETTINGS_FILE = path.join('.data', 'llm_settings.json');
 const defaultSettings = {
   provider: 'gemini', // 'gemini' | 'ollama'
   ollamaUrl: 'http://127.0.0.1:11434',
-  ollamaModel: 'qwen3:14b', // Model chat tieng Viet tot
+  ollamaModel: 'qwen3:8b', // Model chat tieng Viet tot
   ollamaEmbedModel: 'nomic-embed-text', // Model embedding
 };
 

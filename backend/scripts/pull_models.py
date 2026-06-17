@@ -2,7 +2,7 @@ import subprocess
 import sys
 
 MODELS = [
-    "qwen3:14b",
+    "qwen3:8b",
     "nomic-embed-text",
 ]
 
