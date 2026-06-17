@@ -36,6 +36,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem(KEY);
     localStorage.removeItem('sv_customer');
+    localStorage.removeItem('sv_chat_session');
     setAuth(null);
   };
 

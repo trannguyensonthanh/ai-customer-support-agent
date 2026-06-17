@@ -36,6 +36,7 @@ export default function CheckoutPage() {
     setSubmitting(true); setError('');
     try {
       const result = await checkout({ address, paymentMethod, note, voucherCode: voucherResult?.valid ? voucherCode : undefined });
+      clear(); // Xoa gio hang sau khi dat hang thanh cong
       navigate('/order-confirm', { state: { order: result.order } });
     } catch (e) { setError(e.message); }
     setSubmitting(false);

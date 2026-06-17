@@ -63,12 +63,33 @@ chatRouter.post('/chat/stream', async (req, res) => {
   res.flushHeaders?.();
 
   const customerContext = getCustomerContext(req);
-  const { id, session } = getOrCreateSession(sessionId);
+  
+  // 1. Neu user da dang nhap, ghi de sessionId thanh ID cua user
+  // De dam bao tat ca cac trinh duyet/thiet bi deu dung chung 1 lich su
+  const resolvedSessionId = customerContext ? `cust_${customerContext.id}` : sessionId;
+
+  const { id, session } = getOrCreateSession(resolvedSessionId);
   const conv = conversationStore.ensure(id, customerContext?.name ? `${customerContext.name}` : undefined, customerContext?.id);
   
   // Cap nhat label neu co ten khach
   if (customerContext?.name && conv.label?.startsWith('Khách #')) {
     conversationStore.update(conv.id, { label: customerContext.name, customerId: customerContext.id });
+  }
+
+  // 2. Hydrate (Phuc hoi) lich su tu Database vao RAM neu server vua khoi dong lai
+  if (session.history.length === 0) {
+    const pastMessages = messageStore.byConversation(conv.id);
+    if (pastMessages && pastMessages.length > 0) {
+      // Chi lay toi da 10 tin nhan gan nhat de tranh qua tai Context cua LLM
+      const recentMessages = pastMessages.slice(-10);
+      for (const m of recentMessages) {
+        // convert DB format to Gemini API format
+        session.history.push({
+          role: m.role === 'ai' ? 'model' : m.role,
+          parts: [{ text: m.content }]
+        });
+      }
+    }
   }
 
   const emit = (event, data) => {
@@ -165,8 +186,10 @@ chatRouter.get('/health', (_req, res) => {
 
 // GET /api/chat/history/:sessionId
 chatRouter.get('/chat/history/:sessionId', (req, res) => {
-  const { sessionId } = req.params;
-  const conv = conversationStore.bySession(sessionId);
+  const customerContext = getCustomerContext(req);
+  const resolvedSessionId = customerContext ? `cust_${customerContext.id}` : req.params.sessionId;
+
+  const conv = conversationStore.bySession(resolvedSessionId);
   if (!conv) return res.json({ messages: [] });
   const messages = messageStore.byConversation(conv.id);
   res.json({ messages: messages.map(m => ({

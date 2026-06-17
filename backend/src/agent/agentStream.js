@@ -1,8 +1,9 @@
-import { ai } from '../lib/gemini.js';
 import { config } from '../config/env.js';
 import { buildSystemInstruction, SUMMARY_PROMPT } from './systemPrompt.js';
 import { functionDeclarations, executors } from './tools.js';
+import { generateContentProvider, generateContentStreamProvider } from '../lib/llmProvider.js';
 import { analyzeSentiment } from '../services/sentimentService.js';
+import { searchByImageBuffer } from '../services/clipStore.js';
 
 const MAX_STEPS = 6;
 const CONFIDENCE_THRESHOLD = 50; // Duoi nguong nay -> tu dong escalate
@@ -50,13 +51,11 @@ async function generateConversationSummary(history) {
 
     if (!chatText) return null;
 
-    const response = await ai.models.generateContent({
-      model: config.model,
+    const response = await generateContentProvider({
       contents: [{ role: 'user', parts: [{ text: chatText }] }],
       config: {
         systemInstruction: SUMMARY_PROMPT,
         temperature: 0.3,
-        maxOutputTokens: 200,
       },
     });
 
@@ -79,11 +78,26 @@ export async function runAgentStream({
 
   // Tin nhan cua khach
   const userParts = [{ text: userMessage }];
+  let visualSearchResults = null;
+
   for (const img of images) {
     if (img?.data && img?.mimeType) {
+      try {
+        const buffer = Buffer.from(img.data, 'base64');
+        visualSearchResults = await searchByImageBuffer(buffer, 3);
+      } catch (err) {
+        console.error('[vision] Loi khi search by image:', err.message);
+      }
       userParts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
     }
   }
+
+  if (visualSearchResults && visualSearchResults.length > 0) {
+    const productsInfo = visualSearchResults.map(p => `- ${p.code} | ${p.name} (Độ tương đồng: ${Math.round(p.score * 100)}%) | Giá: ${p.price} | Tồn kho: ${p.stock}`).join('\n');
+    userParts.push({ text: `[SYSTEM: Công cụ CLIP Vector Search đã quét ảnh của khách và tìm thấy các sản phẩm tương đồng nhất trong Database:\n${productsInfo}\nHãy dựa vào danh sách này để giới thiệu cho khách.]` });
+    emit('products', { products: visualSearchResults }); // Phat luon cho UI
+  }
+
   history.push({ role: 'user', parts: userParts });
 
   let escalated = false;
@@ -92,8 +106,7 @@ export async function runAgentStream({
   const toolsUsed = [];
 
   for (let step = 0; step < MAX_STEPS; step++) {
-    const stream = await ai.models.generateContentStream({
-      model: config.model,
+    const stream = await generateContentStreamProvider({
       contents: history,
       config: {
         systemInstruction: buildSystemInstruction(language, customerContext),
@@ -143,7 +156,7 @@ export async function runAgentStream({
         let result;
         try {
           result = exec
-            ? await exec(call.args || {})
+            ? await exec(call.args || {}, customerContext)
             : { error: `Khong co cong cu ${call.name}` };
         } catch (err) {
           result = { error: err.message };
@@ -153,7 +166,7 @@ export async function runAgentStream({
         if (call.name === 'lookup_order' && result.found && result.order) {
           emit('order', { orders: [result.order] });
         }
-        if (call.name === 'find_orders_by_contact' && result.found && Array.isArray(result.orders) && result.orders.length) {
+        if ((call.name === 'find_orders_by_contact' || call.name === 'find_cancellable_orders') && result.found && Array.isArray(result.orders) && result.orders.length) {
           emit('order', { orders: result.orders });
         }
         // Phat du lieu san pham
@@ -196,16 +209,8 @@ export async function runAgentStream({
     // Gui confidence cho frontend (de hien thi indicator neu can)
     emit('confidence', { score: confidence });
 
-    // Smart escalation: confidence qua thap -> tu dong chuyen nhan vien
-    if (confidence < CONFIDENCE_THRESHOLD && !escalated) {
-      escalated = true;
-      escalationInfo = {
-        reason: `AI không đủ chắc chắn (confidence: ${confidence}%)`,
-        summary: 'AI đánh giá không đủ thông tin để trả lời chính xác.',
-      };
-      emit('escalated', escalationInfo);
-      emit('delta', { text: '\n\n_Mình không chắc chắn lắm về thông tin này. Mình sẽ kết nối bạn với nhân viên để được hỗ trợ tốt hơn nhé._' });
-    }
+    // Proactive Escalation giờ được handle ở system prompt.
+    // Nếu AI gọi tool escalate_to_human, logic ở đoạn duyệt calls sẽ xử lý.
 
     // Tao summary khi escalation
     if (escalated) {

@@ -9,7 +9,7 @@ import { ChatIcon } from './icons.jsx';
 export default function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [language, setLanguage] = useState('vi');
-  const { messages, status, escalated, followUps, send, requestRating } = useChat();
+  const { messages, status, escalated, humanMode, followUps, send, requestRating, cancelEscalation } = useChat();
 
   const busy = status !== 'idle';
   const showQuick = messages.filter((m) => m.role === 'user').length === 0;
@@ -32,16 +32,18 @@ export default function ChatWidget() {
 
       {open && (
         <div
-          className="anim-pop fixed z-50 flex flex-col overflow-hidden border border-line bg-surface shadow-2xl
+          className="anim-pop fixed z-50 flex flex-col overflow-hidden glass-panel
                      inset-0 rounded-none
                      sm:inset-auto sm:bottom-5 sm:right-5 sm:h-[650px] sm:max-h-[88vh] sm:w-[400px] sm:rounded-3xl"
         >
           <ChatHeader
             escalated={escalated}
+            humanMode={humanMode}
             language={language}
             onLanguage={setLanguage}
             onRate={requestRating}
             onClose={() => setOpen(false)}
+            onCancelEscalation={cancelEscalation}
           />
           <MessageList messages={messages} />
           

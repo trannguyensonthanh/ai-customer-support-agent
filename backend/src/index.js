@@ -11,6 +11,8 @@ import { seed } from './db/store.js';
 import { syncEmbeddings } from './services/embeddingStore.js';
 import { initIo } from './realtime/io.js';
 
+import { initClipStore } from './services/clipStore.js';
+
 const app = express();
 app.use(cors({ origin: config.corsOrigin }));
 app.use(express.json({ limit: '12mb' }));
@@ -30,6 +32,9 @@ initIo(server, config.corsOrigin);
 async function start() {
   seed();
   await syncEmbeddings();
+  // Khong the await initClipStore() o day vi model chay lau, khien cho server start bi treo
+  // Cho no chay ngam o background
+  initClipStore();
 
   server.listen(config.port, () => {
     console.log(`\n  AI Agent CSKH backend dang chay`);

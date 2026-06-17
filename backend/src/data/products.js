@@ -256,7 +256,7 @@ export const products = [
     stock: 40,
     sold: 112,
     tags: [],
-    image: 'https://images.unsplash.com/photo-1585832770485-e68a5dbfa5cb?auto=format&fit=crop&w=400&q=80',
+    image: 'https://kingshop.vn/data/images/ban-ui-hoi-nuoc-Philips-GC-506.jpg',
     images: [],
   },
   {

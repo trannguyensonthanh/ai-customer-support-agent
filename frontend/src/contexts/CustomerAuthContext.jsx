@@ -67,6 +67,7 @@ export function CustomerAuthProvider({ children }) {
   const logout = useCallback(() => {
     localStorage.removeItem(KEY);
     localStorage.removeItem('cskh_auth');
+    localStorage.removeItem('sv_chat_session'); // Clear chat session when logging out
     setToken(null);
     setCustomer(null);
   }, []);

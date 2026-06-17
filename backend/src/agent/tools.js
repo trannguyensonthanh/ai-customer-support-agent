@@ -45,6 +45,16 @@ export const functionDeclarations = [
     },
   },
   {
+    name: 'find_cancellable_orders',
+    description: 'Tim cac don hang co the huy duoc cua khach hang hien tai (cho xac nhan, da xac nhan, dang chuan bi). Dung khi khach muon huy nhung khong cung cap ma don.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        contact: { type: Type.STRING, description: 'Email hoac SDT cua khach hang (neu biet).' }
+      }
+    }
+  },
+  {
     name: 'search_products',
     description:
       'Tim kiem san pham trong cua hang. Dung khi khach hoi ve san pham, gia ca, ton kho, hoac can goi y mua sam.',
@@ -133,18 +143,40 @@ export const executors = {
     };
   },
 
-  async lookup_order({ order_code }) {
+  async lookup_order({ order_code }, customerContext) {
+    if (!customerContext) {
+      return { found: false, message: `[BAO MAT] Vui long dang nhap vao he thong de xem chi tiet don hang cua ban.` };
+    }
     const order = orderStore.byCode(order_code);
     if (!order) return { found: false, message: `Khong tim thay don ${order_code}.` };
+    
+    if (order.customerId !== customerContext.id) {
+      return { found: false, message: `[BAO MAT] Don hang ${order_code} khong thuoc tai khoan cua ban. Ban khong duoc phep xem.` };
+    }
+    
     return { found: true, order: summarizeOrder(order) };
   },
 
-  async find_orders_by_contact({ contact }) {
-    const list = orderStore.byContact(contact);
+  async find_orders_by_contact({ contact }, customerContext) {
+    if (!customerContext) {
+      return { found: false, message: `[BAO MAT] Vui long dang nhap vao he thong de tra cuu danh sach don hang.` };
+    }
+    // Chi tra ve don hang cua chinh tai khoan dang dang nhap, bo qua tham so contact do AI truyen vao de chong hack
+    const list = orderStore.byCustomer(customerContext.id);
     return { found: list.length > 0, count: list.length, orders: list.map(summarizeOrder) };
   },
 
-  async cancel_order({ order_code, reason }) {
+  async cancel_order({ order_code, reason }, customerContext) {
+    if (!customerContext) {
+      return { success: false, message: `[BAO MAT] Vui long dang nhap de huy don hang.` };
+    }
+    const order = orderStore.byCode(order_code);
+    if (!order) return { success: false, message: `Khong tim thay don ${order_code}.` };
+    
+    if (order.customerId !== customerContext.id) {
+      return { success: false, message: `[BAO MAT] Ban khong co quyen huy don hang cua nguoi khac.` };
+    }
+
     const result = orderStore.cancelOrder(order_code, reason || 'Khách yêu cầu hủy qua chat');
     if (result.success) {
       return {
@@ -154,6 +186,15 @@ export const executors = {
       };
     }
     return { success: false, message: result.message };
+  },
+
+  async find_cancellable_orders({ contact }, customerContext) {
+    if (!customerContext) {
+      return { found: false, message: '[BAO MAT] Vui long dang nhap de xem cac don hang co the huy.' };
+    }
+    // Chi tra ve cac don hang cua KH dang dang nhap
+    const list = orderStore.byCustomer(customerContext.id).filter(o => ['Chờ xác nhận', 'Đã xác nhận', 'Đang chuẩn bị'].includes(o.status));
+    return { found: list.length > 0, count: list.length, orders: list.map(summarizeOrder) };
   },
 
   async search_products({ query, category, max_results }) {

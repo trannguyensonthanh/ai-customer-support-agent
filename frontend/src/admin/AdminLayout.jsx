@@ -5,9 +5,12 @@ import { useTheme } from '../contexts/ThemeContext.jsx';
 const LINKS = [
   { to: '/admin', label: '📊 Tổng quan', end: true },
   { to: '/admin/orders', label: '📦 Đơn hàng' },
+  { to: '/admin/products', label: '🛍️ Sản phẩm' },
+  { to: '/admin/users', label: '👥 Người dùng' },
   { to: '/admin/conversations', label: '💬 Hội thoại' },
   { to: '/admin/faqs', label: '❓ Quản lý FAQ' },
   { to: '/admin/tickets', label: '🎫 Ticket' },
+  { to: '/admin/settings', label: '⚙️ Cài đặt AI' },
 ];
 
 export default function AdminLayout() {

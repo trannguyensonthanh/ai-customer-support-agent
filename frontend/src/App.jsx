@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 // Providers
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
@@ -20,6 +20,7 @@ import MyOrders from './customer/MyOrders.jsx';
 import OrderDetail from './customer/OrderDetail.jsx';
 import ChatPage from './shop/ChatPage.jsx';
 import ToastContainer from './components/Toast.jsx';
+import ChatWidget from './components/ChatWidget.jsx';
 
 // Admin
 import AdminLayout from './admin/AdminLayout.jsx';
@@ -28,6 +29,17 @@ import Conversations from './admin/Conversations.jsx';
 import Faqs from './admin/Faqs.jsx';
 import Tickets from './admin/Tickets.jsx';
 import Orders from './admin/Orders.jsx';
+import Users from './admin/Users.jsx';
+import Products from './admin/Products.jsx';
+import Settings from './admin/Settings.jsx';
+
+function GlobalChatWidget() {
+  const location = useLocation();
+  const path = location.pathname.toLowerCase();
+  const hideChat = path.startsWith('/admin') || path === '/chat';
+  if (hideChat) return null;
+  return <ChatWidget />;
+}
 
 export default function App() {
   return (
@@ -37,6 +49,7 @@ export default function App() {
           <NotificationProvider>
             <AdminAuthProvider>
               <ToastContainer />
+              <GlobalChatWidget />
               <Routes>
                 {/* Store & Customer Routes */}
                 <Route path="/" element={<Storefront />} />
@@ -62,6 +75,9 @@ export default function App() {
                   <Route path="faqs" element={<Faqs />} />
                   <Route path="tickets" element={<Tickets />} />
                   <Route path="orders" element={<Orders />} />
+                  <Route path="users" element={<Users />} />
+                  <Route path="products" element={<Products />} />
+                  <Route path="settings" element={<Settings />} />
                 </Route>
               </Routes>
             </AdminAuthProvider>

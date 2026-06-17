@@ -33,14 +33,45 @@ function authFetch(token) {
 export function adminApi(token) {
   const f = authFetch(token);
   return {
+    // FAQ
     getFaqs: () => f('/faqs'),
     createFaq: (data) => f('/faqs', { method: 'POST', body: JSON.stringify(data) }),
     updateFaq: (id, data) => f(`/faqs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteFaq: (id) => f(`/faqs/${id}`, { method: 'DELETE' }),
+    deleteFaqCategory: (categoryName) => f(`/faqs/category/${encodeURIComponent(categoryName)}`, { method: 'DELETE' }),
+    bulkDeleteFaqs: (ids) => f('/faqs/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
+    uploadPdf: async (file, category) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (category) formData.append('category', category + ' (PDF)');
+      const res = await fetch('/api/admin/upload-pdf', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }, // Bỏ Content-Type để trình duyệt tự set multipart/form-data kèm boundary
+        body: formData,
+      });
+      if (!res.ok) throw new Error(await res.json().then(e => e.error).catch(() => 'Lỗi upload PDF'));
+      return res.json();
+    },
+    // Conversations
     getConversations: () => f('/conversations'),
     getConversation: (id) => f(`/conversations/${id}`),
+    // Tickets
     getTickets: () => f('/tickets'),
     updateTicket: (id, status) => f(`/tickets/${id}`, { method: 'PUT', body: JSON.stringify({ status }) }),
+    // Analytics
     getAnalytics: () => f('/analytics'),
+    // Users
+    getUsers: () => f('/users'),
+    createUser: (data) => f('/users', { method: 'POST', body: JSON.stringify(data) }),
+    updateUser: (id, data) => f(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    deleteUser: (id) => f(`/users/${id}`, { method: 'DELETE' }),
+    // Products
+    getProducts: () => f('/products'),
+    createProduct: (data) => f('/products', { method: 'POST', body: JSON.stringify(data) }),
+    updateProduct: (id, data) => f(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    deleteProduct: (id) => f(`/products/${id}`, { method: 'DELETE' }),
+    // Settings
+    getSettings: () => f('/llm-settings'),
+    updateSettings: (data) => f('/llm-settings', { method: 'PUT', body: JSON.stringify(data) }),
   };
 }

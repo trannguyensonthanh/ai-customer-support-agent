@@ -1,6 +1,7 @@
 import { ai } from '../lib/gemini.js';
 import { config } from '../config/env.js';
 import { faqStore } from '../db/store.js';
+import { embedContentProvider } from '../lib/llmProvider.js';
 
 // RAG dua tren FAQ luu trong CSDL. Embedding duoc luu kem moi FAQ.
 // Khi admin them/sua FAQ -> embedding bi xoa -> tu dong embed lai o lan tim toi.
@@ -18,8 +19,7 @@ function cosine(a, b) {
 }
 
 async function embed(text) {
-  const res = await ai.models.embedContent({ model: config.embedModel, contents: text });
-  return res.embeddings[0].values;
+  return await embedContentProvider(text);
 }
 
 // Embed nhung FAQ chua co vector (goi luc khoi dong + sau khi admin sua).

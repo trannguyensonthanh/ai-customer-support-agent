@@ -1,24 +1,35 @@
 import { BotIcon, AgentIcon, CloseIcon, StarIcon } from './icons.jsx';
 
-export default function ChatHeader({ escalated, language, onLanguage, onRate, onClose }) {
+export default function ChatHeader({ escalated, humanMode, language, onLanguage, onRate, onClose, onCancelEscalation }) {
   return (
     <div
       className={`flex items-center gap-2.5 px-3.5 py-3 text-white transition-colors duration-500 ${
-        escalated ? 'bg-agent' : 'bg-brand'
+        humanMode ? 'bg-flag' : escalated ? 'bg-agent' : 'bg-brand'
       }`}
     >
       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15">
-        {escalated ? <AgentIcon className="h-5 w-5" /> : <BotIcon className="h-5 w-5" />}
+        {escalated || humanMode ? <AgentIcon className="h-5 w-5" /> : <BotIcon className="h-5 w-5" />}
       </div>
-      <div className="flex-1">
-        <div className="font-display text-[15px] font-semibold leading-tight">
-          {escalated ? 'Nhân viên hỗ trợ' : 'Trợ lý CSKH'}
+      <div className="flex-1 min-w-0">
+        <div className="font-display text-[15px] font-semibold leading-tight truncate">
+          {humanMode ? 'Nhân viên hỗ trợ' : escalated ? 'Đang chuyển máy...' : 'Trợ lý CSKH'}
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-white/85">
-          <span className="h-2 w-2 rounded-full bg-green-300" />
-          {escalated ? 'Đang kết nối nhân viên' : 'Phản hồi tức thì · Trực tuyến'}
+        <div className="flex items-center gap-1.5 text-[11px] text-white/90 truncate">
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${humanMode ? 'bg-white' : escalated ? 'bg-white animate-pulse' : 'bg-green-300'}`} />
+          {humanMode ? 'Đã kết nối nhân viên' : escalated ? 'Đang chờ nhân viên phản hồi' : 'Phản hồi tức thì · Trực tuyến'}
         </div>
       </div>
+
+      {/* Nút hủy chuyển máy */}
+      {escalated && !humanMode && onCancelEscalation && (
+        <button
+          type="button"
+          onClick={onCancelEscalation}
+          className="mr-1 shrink-0 rounded-lg bg-white/20 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-white hover:text-agent whitespace-nowrap"
+        >
+          Hủy yêu cầu
+        </button>
+      )}
 
       {/* Chuyen ngon ngu */}
       <div className="flex overflow-hidden rounded-lg bg-white/15 text-xs font-medium">

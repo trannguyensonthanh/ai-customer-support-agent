@@ -165,5 +165,12 @@ export function useChat() {
     });
   }, []);
 
-  return { messages, status, escalated, humanMode, followUps, agentTyping, send, requestRating };
+  const cancelEscalation = useCallback(() => {
+    if (!escalated && !humanMode) return;
+    socketRef.current?.emit('customer:cancel_escalation', { sessionId: sessionRef.current });
+    setEscalated(false);
+    setHumanMode(false);
+  }, [escalated, humanMode]);
+
+  return { messages, status, escalated, humanMode, followUps, agentTyping, send, requestRating, cancelEscalation };
 }

@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 import {
   db,
   faqStore,
@@ -10,12 +13,138 @@ import {
   orderStore,
   customerStore,
   notificationStore,
+  productStore,
 } from '../db/store.js';
+import { getLlmSettings, saveLlmSettings } from '../config/llmSettings.js';
 import { syncEmbeddings } from '../services/embeddingStore.js';
+import { processPdfToFaqs } from '../services/pdfStore.js';
 import { sendToCustomerByOrderId } from '../realtime/io.js';
+import { hashPassword } from '../services/authService.js';
 
 export const adminRouter = Router();
 adminRouter.use(requireAuth);
+
+adminRouter.get('/llm-settings', (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Require Admin role' });
+  res.json(getLlmSettings());
+});
+
+adminRouter.put('/llm-settings', (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Require Admin role' });
+  const updated = saveLlmSettings(req.body);
+  res.json({ success: true, settings: updated });
+});
+
+const upload = multer({ dest: 'uploads/' });
+
+// POST /api/admin/upload-pdf
+adminRouter.post('/upload-pdf', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Chưa đính kèm file.' });
+  const category = req.body.category || 'Chính sách (PDF)';
+  try {
+    const result = await processPdfToFaqs(req.file.path, category);
+    // Xóa file tạm
+    fs.unlinkSync(req.file.path);
+    
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(500).json({ error: result.error });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ====== User Management (Admin/Agent/Customer) ======
+
+// GET /api/admin/users — List all users (admin + agents)
+adminRouter.get('/users', (req, res) => {
+  const users = db.users.all().map(u => ({
+    id: u.id, email: u.email, name: u.name, role: u.role, createdAt: u.createdAt,
+  }));
+  const customers = db.customers.all().map(c => ({
+    id: c.id, email: c.email, name: c.name, role: 'customer', phone: c.phone, address: c.address, createdAt: c.createdAt,
+  }));
+  res.json({ users, customers });
+});
+
+// POST /api/admin/users — Create new agent/admin
+adminRouter.post('/users', (req, res) => {
+  const { email, name, role, password } = req.body || {};
+  if (!email || !name || !password) return res.status(400).json({ error: 'Thiếu thông tin.' });
+  if (!['admin', 'agent'].includes(role)) return res.status(400).json({ error: 'Role phải là admin hoặc agent.' });
+  // Check duplicate
+  const existing = db.users.findOne(u => u.email.toLowerCase() === email.toLowerCase());
+  if (existing) return res.status(409).json({ error: 'Email đã tồn tại.' });
+  const user = db.users.insert({ email: email.toLowerCase().trim(), name: name.trim(), role, passwordHash: hashPassword(password) });
+  res.json({ id: user.id, email: user.email, name: user.name, role: user.role });
+});
+
+// PUT /api/admin/users/:id — Update user
+adminRouter.put('/users/:id', (req, res) => {
+  const { name, email, role, password } = req.body || {};
+  const patch = {};
+  if (name) patch.name = name.trim();
+  if (email) patch.email = email.toLowerCase().trim();
+  if (role && ['admin', 'agent'].includes(role)) patch.role = role;
+  if (password) patch.passwordHash = hashPassword(password);
+  const updated = db.users.update(req.params.id, patch);
+  if (!updated) return res.status(404).json({ error: 'Không tìm thấy.' });
+  res.json({ id: updated.id, email: updated.email, name: updated.name, role: updated.role });
+});
+
+// DELETE /api/admin/users/:id — Delete user
+adminRouter.delete('/users/:id', (req, res) => {
+  // Don't allow deleting yourself
+  if (req.user.sub === req.params.id) return res.status(400).json({ error: 'Không thể xóa chính mình.' });
+  db.users.remove(req.params.id);
+  res.json({ ok: true });
+});
+
+// ====== Product Management ======
+
+// GET /api/admin/products
+adminRouter.get('/products', (_req, res) => {
+  res.json(productStore.all());
+});
+
+// POST /api/admin/products — Create product
+adminRouter.post('/products', (req, res) => {
+  const { name, code, category, price, originalPrice, description, image, stock, tags } = req.body || {};
+  if (!name || !price) return res.status(400).json({ error: 'Thiếu tên hoặc giá sản phẩm.' });
+  const product = db.products.insert({
+    name, code: code || `SP${Date.now()}`, category: category || 'Khác',
+    price: Number(price), originalPrice: Number(originalPrice || price),
+    description: description || '', image: image || '', stock: Number(stock || 0),
+    tags: tags || [], rating: 0, reviews: 0, sold: 0,
+  });
+  res.json(product);
+});
+
+// PUT /api/admin/products/:id — Update product
+adminRouter.put('/products/:id', (req, res) => {
+  const { name, code, category, price, originalPrice, description, image, stock, tags } = req.body || {};
+  const patch = {};
+  if (name !== undefined) patch.name = name;
+  if (code !== undefined) patch.code = code;
+  if (category !== undefined) patch.category = category;
+  if (price !== undefined) patch.price = Number(price);
+  if (originalPrice !== undefined) patch.originalPrice = Number(originalPrice);
+  if (description !== undefined) patch.description = description;
+  if (image !== undefined) patch.image = image;
+  if (stock !== undefined) patch.stock = Number(stock);
+  if (tags !== undefined) patch.tags = tags;
+  const updated = db.products.update(req.params.id, patch);
+  if (!updated) return res.status(404).json({ error: 'Không tìm thấy sản phẩm.' });
+  res.json(updated);
+});
+
+// DELETE /api/admin/products/:id
+adminRouter.delete('/products/:id', (req, res) => {
+  db.products.remove(req.params.id);
+  res.json({ ok: true });
+});
 
 // ====== FAQ ======
 adminRouter.get('/faqs', (_req, res) => {
@@ -47,9 +176,29 @@ adminRouter.put('/faqs/:id', async (req, res) => {
   res.json(f);
 });
 
+adminRouter.delete('/faqs/category/:categoryName', (req, res) => {
+  const category = req.params.categoryName;
+  const faqs = faqStore.all().filter(f => f.category === category);
+  for (const f of faqs) {
+    faqStore.remove(f.id);
+  }
+  syncEmbeddings();
+  res.json({ ok: true, deleted: faqs.length });
+});
+
 adminRouter.delete('/faqs/:id', (req, res) => {
   faqStore.remove(req.params.id);
   res.json({ ok: true });
+});
+
+adminRouter.post('/faqs/bulk-delete', (req, res) => {
+  const { ids } = req.body || {};
+  if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids must be an array' });
+  for (const id of ids) {
+    faqStore.remove(id);
+  }
+  syncEmbeddings();
+  res.json({ ok: true, deleted: ids.length });
 });
 
 // ====== Hoi thoai ======

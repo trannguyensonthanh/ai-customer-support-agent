@@ -51,6 +51,28 @@ export function initIo(httpServer, corsOrigin) {
       io.to('agents').emit('agent:customer_typing', { sessionId });
     });
 
+    socket.on('customer:cancel_escalation', ({ sessionId }) => {
+      if (!sessionId) return;
+      const conv = conversationStore.bySession(sessionId);
+      if (!conv || conv.status !== 'escalated') return;
+      
+      // Chuyển lại trạng thái về bot
+      conversationStore.update(conv.id, { status: 'bot' });
+      
+      // Hủy ticket đang open nếu có
+      ticketStore.list()
+        .filter((t) => t.conversationId === conv.id && t.status === 'open')
+        .forEach((t) => ticketStore.update(t.id, { status: 'resolved' }));
+        
+      messageStore.add(conv.id, 'system', 'Khách hàng đã hủy yêu cầu gặp nhân viên.');
+      
+      io.to('agents').emit('agent:conversation_updated', { conversationId: conv.id });
+      io.to(room(sessionId)).emit('agent_message', {
+        agentName: 'Hệ thống',
+        text: 'Đã hủy yêu cầu chuyển máy. Trợ lý AI đã quay lại hỗ trợ bạn!',
+      });
+    });
+
     socket.on('customer:stop_typing', ({ sessionId }) => {
       io.to('agents').emit('agent:customer_stop_typing', { sessionId });
     });

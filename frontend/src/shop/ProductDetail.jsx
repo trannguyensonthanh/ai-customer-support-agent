@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { fetchProduct, fetchProductReviews } from '../lib/customerApi.js';
+import { fetchProduct, fetchProductReviews, fetchProducts } from '../lib/customerApi.js';
 import { useCart } from '../contexts/CartContext.jsx';
 import { useCustomerAuth } from '../contexts/CustomerAuthContext.jsx';
 import Header from '../components/Header.jsx';
@@ -17,14 +17,21 @@ export default function ProductDetail() {
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
 
+  const [related, setRelated] = useState([]);
+
   useEffect(() => {
     setLoading(true);
     Promise.all([
       fetchProduct(id).catch(() => null),
-      fetchProductReviews(id).catch(() => [])
-    ]).then(([prodData, reviewsData]) => {
+      fetchProductReviews(id).catch(() => []),
+      fetchProducts().catch(() => [])
+    ]).then(([prodData, reviewsData, allProducts]) => {
       setProduct(prodData);
       setReviews(reviewsData);
+      if (prodData && allProducts) {
+        const relatedProds = allProducts.filter(p => p.category === prodData.category && p.id !== prodData.id).slice(0, 4);
+        setRelated(relatedProds);
+      }
     }).finally(() => setLoading(false));
   }, [id]);
 
@@ -248,6 +255,30 @@ export default function ProductDetail() {
             </div>
           </div>
         </div>
+        
+        {/* Related Products */}
+        {related.length > 0 && (
+          <div className="mt-16 border-t border-line pt-12">
+            <h2 className="font-display text-2xl font-bold text-ink mb-8">Sản phẩm liên quan</h2>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 lg:grid-cols-4">
+              {related.map(p => (
+                <Link key={p.id} to={`/products/${p.id}`} className="group flex flex-col items-start gap-4">
+                  <div className="relative aspect-square w-full overflow-hidden rounded-3xl border border-line bg-paper">
+                    <img 
+                      src={p.image || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80'} 
+                      alt={p.name} 
+                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" 
+                    />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-ink group-hover:text-brand line-clamp-2">{p.name}</h3>
+                    <p className="mt-1 font-bold text-brand">{formatVnd(p.price)}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

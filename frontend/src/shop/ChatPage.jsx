@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 
 export default function ChatPage() {
   const [language, setLanguage] = useState('vi');
-  const { messages, status, escalated, followUps, send, requestRating } = useChat();
+  const { messages, status, escalated, humanMode, followUps, send, requestRating, cancelEscalation } = useChat();
   const navigate = useNavigate();
 
   const busy = status !== 'idle';
@@ -29,10 +29,12 @@ export default function ChatPage() {
         <div className="flex-1 bg-paper/80 backdrop-blur-xl border border-line rounded-[2rem] shadow-2xl flex flex-col overflow-hidden relative ring-1 ring-black/5">
           <ChatHeader
             escalated={escalated}
+            humanMode={humanMode}
             language={language}
             onLanguage={setLanguage}
             onRate={requestRating}
             onClose={() => navigate(-1)}
+            onCancelEscalation={cancelEscalation}
           />
           
           <div className="flex-1 overflow-y-auto flex flex-col">
