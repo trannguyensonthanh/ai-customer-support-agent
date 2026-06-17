@@ -1,0 +1,27 @@
+# Tuy chon nang cap PRODUCTION: PostgreSQL (kem pgvector) + Redis.
+# Mac dinh ung dung dung kho JSON (chay ngay khong can Docker).
+# Khi muon dung Postgres that:
+#   1) docker compose up -d
+#   2) Cai schema:  psql postgresql://cskh:cskh@localhost:5432/cskh -f backend/db/postgres-schema.sql
+#   3) Viet lai backend/src/db/store.js dung thu vien `pg` (giu nguyen API cac *Store).
+#   4) (tuy chon) Dung Redis adapter cho Socket.io khi chay nhieu instance.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: cskh
+      POSTGRES_PASSWORD: cskh
+      POSTGRES_DB: cskh
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+
+volumes:
+  pgdata:

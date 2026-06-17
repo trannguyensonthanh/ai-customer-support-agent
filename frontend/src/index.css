@@ -1,0 +1,142 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-paper: #fbfaf7;
+  --color-surface: #ffffff;
+  --color-ink: #16202e;
+  --color-muted: #6b7686;
+  --color-line: #ece8df;
+  --color-brand: #2f6f6a;
+  --color-brand-600: #245854;
+  --color-brand-50: #e8f1ef;
+  --color-agent: #e0683a;
+  --color-agent-600: #c2552b;
+  --color-agent-50: #fbede6;
+  --color-flag: #b45309;
+  --color-flag-50: #fbf0df;
+  --color-success: #16a34a;
+  --color-success-50: #f0fdf4;
+  --color-danger: #dc2626;
+  --color-danger-50: #fef2f2;
+
+  --font-display: 'Sora', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-body);
+  }
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  * {
+    box-sizing: border-box;
+  }
+}
+
+/* ====== Dark mode ====== */
+.dark {
+  --color-paper: #0f1117;
+  --color-surface: #1a1d27;
+  --color-ink: #e8eaed;
+  --color-muted: #8b92a0;
+  --color-line: #2a2e3a;
+  --color-brand-50: #1a2e2c;
+  --color-brand-600: #5bb8b0;
+  --color-agent-50: #2e1f17;
+  --color-flag-50: #2e2210;
+  --color-success-50: #0f2918;
+  --color-danger-50: #2e1010;
+}
+
+/* ====== Animations ====== */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pop {
+  from { opacity: 0; transform: scale(0.9) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes blink {
+  0%, 80%, 100% { opacity: 0.25; }
+  40% { opacity: 1; }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideRight {
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideLeft {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+.anim-fadeup { animation: fadeUp 0.28s ease-out both; }
+.anim-pop { animation: pop 0.22s ease-out both; }
+.anim-slidedown { animation: slideDown 0.3s ease-out both; }
+.anim-slideup { animation: slideUp 0.3s ease-out both; }
+.anim-slideright { animation: slideRight 0.3s ease-out both; }
+.anim-slideleft { animation: slideLeft 0.3s ease-out both; }
+.dot-blink { animation: blink 1.3s infinite both; }
+
+.skeleton {
+  background: linear-gradient(90deg, var(--color-line) 25%, var(--color-paper) 50%, var(--color-line) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+/* Toast animation */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes toast-out {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(100%); }
+}
+.toast-enter { animation: toast-in 0.3s ease-out both; }
+.toast-exit { animation: toast-out 0.3s ease-in both; }
+
+/* Scrollbar */
+.scroll-soft::-webkit-scrollbar { width: 6px; }
+.scroll-soft::-webkit-scrollbar-thumb { background: #d9d4c8; border-radius: 999px; }
+.dark .scroll-soft::-webkit-scrollbar-thumb { background: #3a3e4a; }
+
+/* Markdown in chat */
+.chat-md p { margin: 0.25em 0; }
+.chat-md strong { font-weight: 600; }
+.chat-md em { font-style: italic; }
+.chat-md ul, .chat-md ol { margin: 0.25em 0; padding-left: 1.2em; }
+.chat-md li { margin: 0.15em 0; }
+.chat-md code { background: var(--color-brand-50); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.9em; }
+.chat-md a { color: var(--color-brand); text-decoration: underline; }
+.chat-md table { border-collapse: collapse; margin: 0.5em 0; width: 100%; font-size: 0.85em; }
+.chat-md th, .chat-md td { border: 1px solid var(--color-line); padding: 0.35em 0.5em; text-align: left; }
+.chat-md th { background: var(--color-brand-50); font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-fadeup, .anim-pop, .anim-slidedown, .anim-slideup,
+  .anim-slideright, .anim-slideleft, .dot-blink, .skeleton,
+  .toast-enter, .toast-exit { animation: none; }
+}

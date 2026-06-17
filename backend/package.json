@@ -1,0 +1,24 @@
+{
+  "name": "ai-cskh-agent-backend",
+  "version": "0.3.0",
+  "description": "AI Agent ho tro cham soc khach hang - Backend (Increment 3)",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "nanoid": "^5.0.7",
+    "socket.io": "^4.7.5"
+  },
+  "engines": {
+    "node": ">=18.17"
+  }
+}
